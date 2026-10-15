@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroOut</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cellipse cx='16' cy='16' rx='7' ry='9' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M10 24 22 8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" class="logo-bg"/><ellipse cx="16" cy="16" rx="7" ry="9" fill="none" stroke="white" stroke-width="3.5"/><path d="M10 24 22 8" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+    <span>ZeroOut</span>
+  </div>
+  <span id="conn" class="conn" hidden>Connection lost — retrying…</span>
+</header>
+
+<main>
+  <div id="error" class="banner banner-error" hidden></div>
+
+  <section id="resume" class="banner banner-warn" hidden>
+    <div>
+      <strong>Unfinished job</strong>
+      <p id="resume-text"></p>
+    </div>
+    <div class="actions">
+      <button id="resume-discard" class="btn btn-ghost">Discard</button>
+      <button id="resume-go" class="btn btn-primary">Resume</button>
+    </div>
+  </section>
+
+  <section id="running" class="card" hidden>
+    <div class="running-head">
+      <div>
+        <div class="eyebrow">Wiping</div>
+        <h2 id="run-volume"></h2>
+      </div>
+      <button id="cancel" class="btn btn-danger">Cancel</button>
+    </div>
+    <ol id="run-passes" class="pass-pills"></ol>
+    <div class="phase-line"><span id="run-phase"></span><span id="run-percent"></span></div>
+    <div class="bar"><div id="run-bar" class="bar-fill"></div></div>
+    <dl class="stats">
+      <div><dt>Speed</dt><dd id="run-rate">—</dd></div>
+      <div><dt>This phase</dt><dd id="run-done">—</dd></div>
+      <div><dt>Elapsed</dt><dd id="run-elapsed">—</dd></div>
+      <div><dt>Time left (est.)</dt><dd id="run-eta">—</dd></div>
+    </dl>
+    <details class="log" open>
+      <summary>Log</summary>
+      <ol id="run-log"></ol>
+    </details>
+  </section>
+
+  <section>
+    <h2 class="section-title">Volumes</h2>
+    <div id="volumes" class="vol-grid"></div>
+    <div id="no-volumes" class="empty" hidden>
+      <p><strong>No volumes found.</strong> Mount each volume you want to wipe into the container under <code>/targets</code>, for example:</p>
+      <pre>-v /volume1:/targets/volume1</pre>
+    </div>
+  </section>
+
+  <section id="setup" class="card" hidden>
+    <h2>Wipe free space on <span id="setup-volume"></span></h2>
+    <p class="muted">ZeroOut fills the free space with files of the chosen pattern, syncs them to disk, then deletes them. Existing files are never touched.</p>
+
+    <fieldset>
+      <legend>Passes</legend>
+      <div class="presets">
+        <button type="button" class="chip" data-preset="zero">1 × zeros</button>
+        <button type="button" class="chip" data-preset="random-zero">Random, then zeros</button>
+        <button type="button" class="chip" data-preset="three">3-pass (FF, random, 00)</button>
+      </div>
+      <ol id="passes" class="pass-list"></ol>
+      <div class="pass-controls">
+        <button type="button" id="add-pass" class="btn btn-ghost btn-sm">+ Add pass</button>
+        <span class="muted small">One pass is enough for modern hard drives. Ending with zeros helps if the disk image is ever compacted.</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>How full</legend>
+      <label class="radio">
+        <input type="radio" name="mode" value="margin" checked>
+        <span><strong>Leave a safety margin</strong> of
+          <input id="margin" type="number" min="0" step="1" value="10" class="num"> GB
+          <span class="muted small block">Other apps keep working. Root-reserved space (<span id="reserved"></span>) is not wiped.</span>
+        </span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="mode" value="full">
+        <span><strong>Fill completely</strong>, including root-reserved space
+          <span class="muted small block">For a brief moment the volume is 100% full, so writes from shares and apps on it will fail. Run when the NAS is idle.</span>
+        </span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Options</legend>
+      <label class="check">
+        <input id="verify" type="checkbox">
+        <span><strong>Verify each pass</strong> by reading it back <span class="muted small">(roughly doubles the time)</span></span>
+      </label>
+    </fieldset>
+
+    <div class="estimate" id="estimate"></div>
+    <div class="actions">
+      <button id="setup-close" class="btn btn-ghost">Close</button>
+      <button id="start" class="btn btn-primary">Start wipe…</button>
+    </div>
+  </section>
+
+  <section id="history-section" hidden>
+    <h2 class="section-title">History</h2>
+    <div class="table-wrap">
+      <table class="history">
+        <thead><tr><th>Started</th><th>Volume</th><th>Passes</th><th>Result</th><th>Duration</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<dialog id="confirm">
+  <form method="dialog">
+    <h2>Start wipe?</h2>
+    <ul id="confirm-list"></ul>
+    <p class="muted small">You can cancel at any time; fill files are removed when the job stops.</p>
+    <div class="actions">
+      <button value="cancel" class="btn btn-ghost">Back</button>
+      <button value="ok" class="btn btn-primary">Start</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

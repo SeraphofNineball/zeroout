@@ -1,0 +1,26 @@
+# ZeroOut on a UGREEN NAS (UGOS Pro) — paste into Docker > Project > Create.
+#
+# Each volume you want to be able to wipe is bind-mounted under /targets.
+# Keep /data (job history + resume state) on a DIFFERENT volume than the
+# targets, so a full target can't stop ZeroOut from saving its state.
+#
+# Then open http://<nas-ip>:8088
+
+services:
+  zeroout:
+    image: ghcr.io/seraphofnineball/zeroout:latest
+    container_name: zeroout
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    volumes:
+      - /volume1:/targets/volume1
+      - /volume3/docker/zeroout:/data
+    environment:
+      # Set a password to require a login (any username works).
+      ZEROOUT_PASSWORD: ""
+      # Trial run: caps each pass at 1 GiB. Delete this line for a real wipe.
+      ZEROOUT_MAX_BYTES_PER_PASS: "1073741824"
+    # On stop, ZeroOut cancels a running wipe and deletes its fill files
+    # (terabytes on a big volume); give it time to finish.
+    stop_grace_period: 2m
