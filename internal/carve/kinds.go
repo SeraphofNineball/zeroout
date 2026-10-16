@@ -93,7 +93,7 @@ var Kinds = []Kind{
 	{"zip", CatArchives, "ZIP archive", "application/zip", true, 64 * GB},
 	{"jar", CatArchives, "Java archive", "application/java-archive", true, GB},
 	{"apk", CatArchives, "Android package", "application/vnd.android.package-archive", true, 4 * GB},
-	{"rar", CatArchives, "RAR archive", "application/vnd.rar", true, 64 * GB},
+	{"rar", CatArchives, "RAR archive", "application/vnd.rar", false, 64 * GB},
 	{"7z", CatArchives, "7-Zip archive", "application/x-7z-compressed", true, 64 * GB},
 	{"gz", CatArchives, "Gzip archive", "application/gzip", false, 64 * GB},
 	{"bz2", CatArchives, "Bzip2 archive", "application/x-bzip2", false, 64 * GB},

@@ -504,20 +504,38 @@ func openOLE(c *probe) result {
 			kind = "msg"
 		}
 	}
-	if nFAT == 0 || nFAT > 109 {
-		return unknown(kind) // FAT continues in DIFAT sectors; not followed
+	if nFAT == 0 || nFAT > 1<<20 {
+		return unknown(kind)
+	}
+	// FAT sector numbers: 109 in the header, the rest in a DIFAT chain.
+	fatSecs := make([]int64, 0, nFAT)
+	for i := int64(0); i < min(nFAT, 109); i++ {
+		fatSecs = append(fatSecs, int64(le.Uint32(h[76+4*i:])))
+	}
+	difat := make([]byte, ss)
+	for next, hops := int64(le.Uint32(h[68:])), 0; int64(len(fatSecs)) < nFAT; hops++ {
+		if next >= 0xFFFFFFFA || hops > 1<<16 {
+			return unknown(kind)
+		}
+		if !c.read(difat, (next+1)*ss) {
+			return sized(kind, c.avail()+1) // DIFAT lies beyond the free space
+		}
+		per := ss/4 - 1
+		for k := int64(0); k < per && int64(len(fatSecs)) < nFAT; k++ {
+			fatSecs = append(fatSecs, int64(le.Uint32(difat[4*k:])))
+		}
+		next = int64(le.Uint32(difat[4*per:]))
 	}
 	// The file ends after the highest sector any FAT entry marks as used.
 	fat := make([]byte, ss)
 	last := int64(-1)
-	for i := int64(0); i < nFAT; i++ {
-		sec := int64(le.Uint32(h[76+4*i:]))
+	for i, sec := range fatSecs {
 		if !c.read(fat, (sec+1)*ss) {
 			return sized(kind, c.avail()+1) // FAT lies beyond the free space
 		}
 		for k := ss/4 - 1; k >= 0; k-- {
 			if le.Uint32(fat[4*k:]) != 0xFFFFFFFF {
-				last = max(last, i*(ss/4)+k)
+				last = max(last, int64(i)*(ss/4)+k)
 				break
 			}
 		}

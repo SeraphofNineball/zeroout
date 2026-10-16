@@ -71,6 +71,22 @@ type openFile struct {
 	exact    bool
 }
 
+// shieldsHeaders reports whether headers inside the open file should be
+// treated as embedded content rather than the start of the next file. Once a
+// format without a hard terminator has reached a plausible end (a PDF's
+// %%EOF), the next header ends it instead: real filesystems pack files back
+// to back with no gap.
+func (c *openFile) shieldsHeaders() bool {
+	if !Kinds[c.kind].container {
+		return false
+	}
+	if le, ok := c.st.(lastEnder); ok {
+		_, seen := le.lastEnd()
+		return !seen
+	}
+	return true
+}
+
 const readSize = 16 << 20
 
 // Scan processes one free extent. Extents must be maximal runs of free
@@ -150,7 +166,7 @@ func (s *Scanner) block(b []byte, o, runEnd int64) error {
 		return nil
 	}
 
-	if s.cur == nil || !Kinds[s.cur.kind].container {
+	if s.cur == nil || !s.cur.shieldsHeaders() {
 		if f := s.detect(b, o, runEnd); f != nil {
 			if s.cur != nil {
 				if err := s.closeEstimate(o); err != nil {

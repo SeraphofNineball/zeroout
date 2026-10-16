@@ -154,6 +154,32 @@ func TestScanFindsDeletedFiles(t *testing.T) {
 	}
 }
 
+// Real filesystems pack files back to back with no zero block between them.
+// A container format must not swallow the files that follow it.
+func TestPackedAfterContainer(t *testing.T) {
+	files := testFiles(t)
+	order := []string{"pdf", "jpg", "docx", "txt", "wav"}
+	im := ext4test.Image{Blocks: 100, Data: map[int][]byte{}}
+	where := map[string]int{}
+	next := 5
+	for _, k := range order {
+		where[k] = next
+		im.Data[next] = files[k]
+		next += blocks(len(files[k]))
+	}
+	items := scanImage(t, im.Build(), im.Blocks)
+	byStart := map[int64]Item{}
+	for _, it := range items {
+		byStart[it.Offset] = it
+	}
+	for _, k := range order {
+		it, ok := byStart[int64(where[k])*bs]
+		if !ok || Kinds[it.Kind].Ext != k || it.Size != int64(len(files[k])) {
+			t.Errorf("%s: got %+v (ok=%v), want size %d; all: %s", k, it, ok, len(files[k]), describe(items))
+		}
+	}
+}
+
 func scanImage(t *testing.T, img []byte, nblocks int) []Item {
 	t.Helper()
 	fs, err := ext4.Open(bytes.NewReader(img))
@@ -232,5 +258,38 @@ func TestOggPageWalk(t *testing.T) {
 	end, s := st.feed(data)
 	if s != done || end != int64(len(file)) {
 		t.Fatalf("ogg: end %d status %d, want %d done", end, s, len(file))
+	}
+}
+
+// A minimal Compound File (Word 97) with 512-byte sectors: FAT in sector 0,
+// directory in sector 1, data in sectors 2-9, so the file is 11 sectors.
+func TestOLESize(t *testing.T) {
+	f := make([]byte, 11*512)
+	copy(f, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+	le := binary.LittleEndian
+	le.PutUint16(f[30:], 9)          // sector shift
+	le.PutUint32(f[44:], 1)          // one FAT sector
+	le.PutUint32(f[48:], 1)          // directory starts at sector 1
+	le.PutUint32(f[68:], 0xFFFFFFFE) // no DIFAT chain
+	le.PutUint32(f[76:], 0)          // FAT is sector 0
+	for i := 1; i < 109; i++ {
+		le.PutUint32(f[76+4*i:], 0xFFFFFFFF)
+	}
+	fat := f[512:1024]
+	for i := 0; i < 128; i++ {
+		le.PutUint32(fat[4*i:], 0xFFFFFFFF) // free
+	}
+	le.PutUint32(fat[0:], 0xFFFFFFFD) // FAT sector
+	le.PutUint32(fat[4:], 0xFFFFFFFE) // directory
+	for s := 2; s < 9; s++ {
+		le.PutUint32(fat[4*s:], uint32(s+1))
+	}
+	le.PutUint32(fat[4*9:], 0xFFFFFFFE)
+	copy(f[1024:], []byte("W\x00o\x00r\x00d\x00D\x00o\x00c\x00u\x00m\x00e\x00n\x00t\x00"))
+
+	img := ext4test.Image{Blocks: 20, Data: map[int][]byte{5: f, 7: f[:0]}}
+	items := scanImage(t, img.Build(), 20)
+	if len(items) != 1 || Kinds[items[0].Kind].Ext != "doc" || items[0].Size != int64(len(f)) || items[0].Flags&FlagExact == 0 {
+		t.Fatalf("items = %+v (%s)", items, describe(items))
 	}
 }
