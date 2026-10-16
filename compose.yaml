@@ -1,10 +1,12 @@
 # ZeroOut on a UGREEN NAS (UGOS Pro) — paste into Docker > Project > Create.
-#
-# Each volume you want to be able to wipe is bind-mounted under /targets.
-# Keep /data (job history + resume state) on a DIFFERENT volume than the
-# targets, so a full target can't stop ZeroOut from saving its state.
-#
 # Then open http://<nas-ip>:8088
+#
+#   /targets/<name>   volumes you can wipe or scan
+#   /recover/<name>   where recovered files can be written
+#   /data             job history, resume state, scan results
+#
+# Keep /data and the recovery destinations on a DIFFERENT disk than the
+# volumes you wipe or scan.
 
 services:
   zeroout:
@@ -16,11 +18,20 @@ services:
     volumes:
       - /volume1:/targets/volume1
       - /volume3/docker/zeroout:/data
+      # Recovery destinations. Create the "Recovered" shared folder on
+      # volume3 first so the files show up in File Manager.
+      - /volume3/Recovered:/recover/volume3
+      # Plug the USB drive in before starting ZeroOut, and restart ZeroOut if
+      # you reconnect it (it shows as unavailable otherwise).
+      - /mnt/@usb/sde2:/recover/usb
+    devices:
+      # Read-only access to volume1's hard-drive array (beneath the NVMe
+      # cache) for "Find deleted files". The UI tells you if this is wrong.
+      - /dev/mapper/ug_A733F9_1771451578_pool1-volume1_bcache_data:/dev/mapper/ug_A733F9_1771451578_pool1-volume1_bcache_data:r
     environment:
-      # Set a password to require a login (any username works).
+      # Strongly recommended now that the UI can read deleted files:
+      # set a password to require a login (any username works).
       ZEROOUT_PASSWORD: ""
-      # Trial run: caps each pass at 1 GiB. Delete this line for a real wipe.
-      ZEROOUT_MAX_BYTES_PER_PASS: "1073741824"
     # On stop, ZeroOut cancels a running wipe and deletes its fill files
     # (terabytes on a big volume); give it time to finish.
     stop_grace_period: 2m

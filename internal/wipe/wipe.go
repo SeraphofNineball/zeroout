@@ -12,8 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"unsafe"
 
+	"zeroout/internal/aligned"
 	"zeroout/internal/volume"
 )
 
@@ -134,7 +134,7 @@ func Run(ctx context.Context, cfg Config, h Hooks) (err error) {
 		syncDir(cfg.Target)
 	}()
 
-	r := &runner{cfg: cfg, dir: dir, h: h, buf: alignedBuffer(cfg.BlockBytes)}
+	r := &runner{cfg: cfg, dir: dir, h: h, buf: aligned.Buffer(cfg.BlockBytes)}
 	for i := cfg.FirstPass; i < len(cfg.Passes); i++ {
 		if err := r.pass(ctx, i); err != nil {
 			return err
@@ -399,16 +399,6 @@ func (r *runner) emit() {
 	if r.h.Progress != nil {
 		r.h.Progress(r.prog)
 	}
-}
-
-// alignedBuffer returns a buffer whose start is aligned for O_DIRECT.
-func alignedBuffer(size int) []byte {
-	b := make([]byte, size+align)
-	off := 0
-	if rem := int(uintptr(unsafe.Pointer(&b[0])) & (align - 1)); rem != 0 {
-		off = align - rem
-	}
-	return b[off : off+size : off+size]
 }
 
 func syncDir(path string) {

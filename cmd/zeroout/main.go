@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"zeroout/internal/blockdev"
 	"zeroout/internal/job"
 	"zeroout/internal/web"
 )
@@ -23,7 +24,9 @@ import (
 func main() {
 	listen := flag.String("listen", env("ZEROOUT_LISTEN", ":8080"), "HTTP listen address")
 	targets := flag.String("targets", env("ZEROOUT_TARGETS", "/targets"), "directory whose subdirectories are the volumes to offer")
-	data := flag.String("data", env("ZEROOUT_DATA", "/data"), "directory for job state and history")
+	recoverDir := flag.String("recover", env("ZEROOUT_RECOVER", "/recover"), "directory whose subdirectories are recovery destinations")
+	data := flag.String("data", env("ZEROOUT_DATA", "/data"), "directory for job state, history and scan results")
+	devices := flag.String("devices", os.Getenv("ZEROOUT_DEVICES"), "override scan devices: volume1=/dev/x,volume2=/path/image")
 	allowUnmounted := flag.Bool("allow-unmounted", envBool("ZEROOUT_ALLOW_UNMOUNTED"), "allow wiping targets that are not mount points (development only)")
 	maxBytes := flag.Int64("max-bytes-per-pass", envInt("ZEROOUT_MAX_BYTES_PER_PASS"), "cap bytes written per pass, 0 for no cap (trial runs)")
 	health := flag.Bool("healthcheck", false, "probe the running server and exit (for Docker HEALTHCHECK)")
@@ -35,7 +38,9 @@ func main() {
 
 	m, err := job.NewManager(job.Options{
 		TargetsDir:      *targets,
+		RecoverDir:      *recoverDir,
 		DataDir:         *data,
+		Devices:         blockdev.ParseOverrides(*devices),
 		AllowUnmounted:  *allowUnmounted,
 		MaxBytesPerPass: *maxBytes,
 		Logf:            log.Printf,

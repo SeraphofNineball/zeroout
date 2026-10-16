@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"errors"
 	"syscall"
 	"unsafe"
 )
@@ -31,3 +32,8 @@ func Stat(path string) (Usage, error) {
 func mountInfo(path string) (isMount bool, fsType, source string) {
 	return true, "", ""
 }
+
+// DeviceID is not implemented on Windows; same-device checks are skipped.
+func DeviceID(path string) (uint64, error) { return 0, errNoDeviceID }
+
+var errNoDeviceID = errors.New("device IDs are not available on Windows")

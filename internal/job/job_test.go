@@ -79,10 +79,13 @@ func TestStartValidates(t *testing.T) {
 func TestInterruptedJobIsResumableAfterRestart(t *testing.T) {
 	targets, data := setup(t)
 
-	// Simulate a crash: state.json says a job was running after pass 1 of 3,
-	// and its fill files are still on the volume.
-	j := &Job{ID: "x", Spec: spec(wipe.One, wipe.Random, wipe.Zero), State: Running, PassesDone: 1, StartedAt: time.Now()}
-	b, _ := json.Marshal(persisted{Current: j})
+	// Simulate a crash: state.json (in the pre-scan format, without kind or
+	// volume) says a wipe was running after pass 1 of 3, and its fill files
+	// are still on the volume.
+	sp := spec(wipe.One, wipe.Random, wipe.Zero)
+	b, _ := json.Marshal(map[string]any{"current": map[string]any{
+		"id": "x", "spec": sp, "state": Running, "passesDone": 1, "startedAt": time.Now(),
+	}})
 	os.MkdirAll(data, 0o755)
 	os.WriteFile(filepath.Join(data, "state.json"), b, 0o644)
 	stale := filepath.Join(targets, "vol", wipe.DirName)
@@ -91,7 +94,8 @@ func TestInterruptedJobIsResumableAfterRestart(t *testing.T) {
 
 	m := newTestManager(t, targets, data)
 	s := m.Status()
-	if s.Resumable == nil || s.Resumable.State != Interrupted || s.Resumable.PassesDone != 1 {
+	if s.Resumable == nil || s.Resumable.State != Interrupted || s.Resumable.PassesDone != 1 ||
+		s.Resumable.Kind != KindWipe || s.Resumable.Volume != "vol" {
 		t.Fatalf("resumable = %+v", s.Resumable)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
